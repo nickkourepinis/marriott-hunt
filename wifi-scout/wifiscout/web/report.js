@@ -23,6 +23,7 @@
     }
     return el;
   }
+  function command() { return (B.meta && B.meta.command) || 'python3 -m wifiscout'; }
   function section(title, lede) {
     var el = h('section', null, h('h2', { text: title }));
     if (lede) el.appendChild(h('p', { class: 'lede', text: lede }));
@@ -107,6 +108,7 @@
     hero.appendChild(h('div', { class: 'eyebrow', text: 'Network health' }));
     if (a.score != null) hero.appendChild(h('div', { class: 'figure' }, h('b', { text: a.score }), h('span', { text: 'out of 100' })));
     hero.appendChild(h('p', { text: a.verdict || '' }));
+    if (a.score_note) hero.appendChild(h('p', { class: 'small muted', text: a.score_note }));
     var c = a.counts || {};
     var chips = h('div', { class: 'row' });
     ['critical', 'major', 'minor'].forEach(function (name) {
@@ -123,7 +125,7 @@
     if (k.coverage_pct != null) tiles.appendChild(tile('Usable coverage', k.coverage_pct, '%', cov.spots + ' spots measured'));
     if (k.devices) tiles.appendChild(tile('Devices', k.devices, null, ctx.access_points ? ctx.access_points + (ctx.access_points === 1 ? ' access point' : ' access points') : null));
     if (k.neighbors != null) tiles.appendChild(tile('Neighbour networks', k.neighbors, null, ((B.wifi || {}).channels || {}).density ? B.wifi.channels.density.level + ' crowding' : null));
-    if (!tiles.childNodes.length) tiles.appendChild(h('p', { class: 'muted', text: 'Run "wifiscout" on a computer in your home to fill this in.' }));
+    if (!tiles.childNodes.length) tiles.appendChild(h('p', { class: 'muted', text: 'Run "' + command() + '" on a computer in your home to fill this in.' }));
     return h('div', { class: 'panel verdict' }, hero, tiles);
   }
   function livePanel() {
@@ -177,7 +179,7 @@
     if (!spots.length) {
       sec.appendChild(h('div', { class: 'empty stack' },
         h('h3', { text: 'No rooms measured yet' }),
-        h('p', { text: LIVE ? 'Scan the code above with your iPhone and take a reading in each room. The map draws itself here.' : 'Run "wifiscout survey", scan the QR code with your iPhone and take a reading in each room.' })));
+        h('p', { text: LIVE ? 'Scan the code above with your iPhone and take a reading in each room. The map draws itself here.' : 'Run "' + command() + ' survey", scan the QR code with your iPhone and take a reading in each room.' })));
       return sec;
     }
     var scores = scoreIndex();
@@ -495,7 +497,8 @@
         ['Delay when idle', speed.idle_ms != null ? fmt.ms(speed.idle_ms) : null],
         ['Delay when busy', speed.loaded_down_ms != null || speed.loaded_up_ms != null ? fmt.ms(Math.max(speed.loaded_down_ms || 0, speed.loaded_up_ms || 0)) : null],
         ['Tested with', (speed.server || '') + (speed.method === 'networkQuality' ? ' (macOS networkQuality)' : '') + (speed.via ? ', computer on ' + (speed.via === 'wifi' ? 'Wi-Fi' : speed.via) : '')],
-        ['Provider', speed.isp], ['Data used', speed.bytes_down ? Math.round((speed.bytes_down + speed.bytes_up) / 1e6) + ' MB' : null]]));
+        ['Provider', speed.isp], ['Data used', speed.bytes_down ? Math.round((speed.bytes_down + speed.bytes_up) / 1e6) + ' MB' : null],
+        ['Note', speed.note]]));
     } else {
       left.appendChild(h('p', { class: 'muted small', text: 'The internet speed test was skipped.' }));
     }

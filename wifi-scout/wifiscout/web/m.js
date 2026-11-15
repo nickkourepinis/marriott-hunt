@@ -82,7 +82,7 @@
   function pingTest(count) {
     var times = [], fails = 0, index = 0;
     function next() {
-      if (index >= count) {
+      if (index >= count || (index >= 5 && !times.length)) {   // nothing answered: do not keep the user waiting
         var kept = times.length;
         return {
           rtt_ms: kept ? Math.round(WS.median(times) * 10) / 10 : null,
@@ -172,6 +172,7 @@
     setProgress('Checking response time…');
     pingTest(14).then(function (ping) {
       Object.assign(result, ping);
+      if (ping.rtt_ms == null) throw new Error('offline');
       setProgress('Measuring download…');
       return downTest(3500);
     }).then(function (down) {
@@ -485,6 +486,12 @@
       h('li', null, 'Add the action "Get Contents of URL". In its address box enter this, ending with the = sign:', h('br'), h('code', { id: 'radio-url', text: (server.radio_url || '') + '&rssi=' })),
       h('li', { text: 'With the cursor right after the = sign, tap "Network Details" in the bar above the keyboard. It appears as a blue bubble at the end of the address.' }),
       h('li', { text: 'Tap the play button once and choose Allow when it asks to connect.' })));
+    if (server.stable_radio_url) {
+      shortcut.appendChild(h('p', { class: 'small' }, 'Better on a Mac: this form of the address keeps working if the computer\u2019s number changes: ',
+        h('code', { text: server.stable_radio_url + '&rssi=' })));
+    } else {
+      shortcut.appendChild(h('p', { class: 'small muted', text: 'If the Shortcut stops working later, the computer\u2019s address has changed: come back here for the current one.' }));
+    }
     shortcut.appendChild(h('p', { class: 'small muted', text: 'Optional, for channel and access-point detail: add the same pair of actions again with "Channel Number" and an address ending &ch= , then "BSSID" with &bssid= , "TX Rate" with &tx= and "Noise" with &noise= .' }));
     shortcut.appendChild(h('button', { class: 'btn', onclick: function () {
       var text = (server.radio_url || '') + '&rssi=';

@@ -1,6 +1,7 @@
 """Run every collector and assemble the data bundle the analysis reads."""
 from __future__ import annotations
 
+import os
 import platform
 import time
 
@@ -61,12 +62,31 @@ def run_audit(say=None, quick=False, probe_ports=True, ping_devices=True, speed_
     return audit
 
 
+_monitor_cache = {}
+
+
+def monitor_data(path):
+    """Summary and chart series for the monitor log, re-read only when the file changes."""
+    try:
+        stamp = (os.path.getmtime(path), os.path.getsize(path))
+    except OSError:
+        return None, []
+    hit = _monitor_cache.get(path)
+    if hit and hit[0] == stamp:
+        return hit[1], hit[2]
+    samples = monitor.load_samples(path)
+    summary = monitor.summarize(samples) if samples else None
+    series = thin_series(samples)
+    _monitor_cache[path] = (stamp, summary, series)
+    return summary, series
+
+
 def build_bundle(datadir, survey_data=None, collector_via=None):
     """Merge the saved audit, survey, eero pull and monitor log into one bundle."""
     audit = datadir.load_json("audit.json", {}) or {}
     survey = survey_data if survey_data is not None else (datadir.load_json("survey.json", {}) or {})
     eero = datadir.load_json("eero.json", None)
-    samples = monitor.load_samples(datadir.path("monitor.jsonl"))
+    monitor_summary, monitor_series = monitor_data(datadir.path("monitor.jsonl"))
     network = audit.get("network") or {}
     bundle = {
         "meta": audit.get("meta") or {"version": __version__, "generated": None},
@@ -80,8 +100,8 @@ def build_bundle(datadir, survey_data=None, collector_via=None):
         "router": audit.get("router"),
         "modem": audit.get("modem"),
         "eero": eero,
-        "monitor": monitor.summarize(samples) if samples else None,
-        "monitor_series": thin_series(samples),
+        "monitor": monitor_summary,
+        "monitor_series": monitor_series,
         "survey": {
             "floors": survey.get("floors") or ["Main floor"],
             "spots": survey.get("spots") or [],
@@ -90,6 +110,7 @@ def build_bundle(datadir, survey_data=None, collector_via=None):
         },
         "errors": audit.get("errors") or [],
     }
+    bundle["meta"] = dict(bundle["meta"], command=osutil.command_name())
     bundle["analysis"] = analyze.analyze(bundle)
     return bundle
 

@@ -51,13 +51,34 @@ def json_for_script(data):
         .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
 
 
+KEY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"   # no look-alike characters
+
+
+def load_key(datadir, renew=False):
+    """The access key for the survey pages.
+
+    It is kept between runs so the address typed into the iPhone Shortcut keeps working.
+    """
+    saved = datadir.load_json("server.json", {}) or {}
+    key = saved.get("key")
+    if renew or not isinstance(key, str) or len(key) < 8:
+        key = "".join(secrets.choice(KEY_ALPHABET) for _ in range(10))
+        datadir.save_json("server.json", {"key": key})
+        try:
+            os.chmod(datadir.path("server.json"), 0o600)
+        except OSError:
+            pass
+    return key
+
+
 class App(object):
     """State shared by the HTTP and HTTPS listeners."""
 
-    def __init__(self, datadir, local_ip=None, collector_via="unknown", token=None):
+    def __init__(self, datadir, local_ip=None, collector_via="unknown", token=None, stable_host=None):
         self.datadir = datadir
         self.survey = store.Survey(datadir)
-        self.token = token or secrets.token_urlsafe(6)
+        self.token = token or load_key(datadir)
+        self.stable_host = stable_host
         self.local_ip = local_ip or "127.0.0.1"
         self.collector_via = collector_via
         self.http_port = None
@@ -80,6 +101,12 @@ class App(object):
 
     def radio_url(self):
         return self.url(False, "/api/radio") or self.url(True, "/api/radio")
+
+    def stable_radio_url(self):
+        """Same address by computer name, which survives the computer's number changing (Bonjour)."""
+        if not self.stable_host:
+            return None
+        return self.url(False, "/api/radio", host=self.stable_host)
 
     # -- data
     def _stamp(self):
@@ -120,6 +147,7 @@ class App(object):
             "server": {
                 "version": __version__, "collector_via": self.collector_via, "shortcut_name": SHORTCUT_NAME,
                 "https_url": self.url(True), "http_url": self.url(False), "radio_url": self.radio_url(),
+                "stable_radio_url": self.stable_radio_url(),
             },
         }
 
@@ -398,12 +426,13 @@ def _bind(app, port, tries=8):
     return None
 
 
-def start(datadir, local_ip=None, collector_via="unknown", http_port=8787, https_port=8788, tls=True, token=None):
+def start(datadir, local_ip=None, collector_via="unknown", http_port=8787, https_port=8788, tls=True, token=None,
+          stable_host=None):
     """Start the HTTP (and, when a certificate can be made, HTTPS) listeners on background threads.
 
     Returns (app, [servers]). Call server.shutdown() on each to stop.
     """
-    app = App(datadir, local_ip=local_ip, collector_via=collector_via, token=token)
+    app = App(datadir, local_ip=local_ip, collector_via=collector_via, token=token, stable_host=stable_host)
     servers = []
     plain = _bind(app, http_port)
     if plain is None:
@@ -412,6 +441,8 @@ def start(datadir, local_ip=None, collector_via="unknown", http_port=8787, https
     servers.append(plain)
     if tls:
         hosts = [app.local_ip, "127.0.0.1", "localhost"]
+        if stable_host:
+            hosts.append(stable_host)
         name = socket.gethostname()
         if name and "." not in name:
             hosts += [name, name + ".local"]

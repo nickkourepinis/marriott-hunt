@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import select
 import socket
-import struct
+import threading
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -174,11 +174,12 @@ def mdns_scan(local_ip=None, duration=4.0):
     questions += [(service + ".local", dnsmsg.TYPE_PTR) for service in SERVICE_TYPES]
     _send_questions(sockets, questions)
     deadline = time.time() + duration
+    hard_stop = deadline + 4.0
     resend_at = time.time() + 1.0
     resent = False
     pending = []
     try:
-        while time.time() < deadline:
+        while time.time() < min(deadline, hard_stop):
             readable, _, _ = select.select([s for s, _ in sockets], [], [], 0.25)
             for sock in readable:
                 try:
@@ -332,7 +333,18 @@ def ssdp_scan(local_ip=None, duration=3.0, fetch=True):
     finally:
         sock.close()
     if fetch:
+        # Ask every device for its description at once, and do not let a slow one hold up the scan.
+        def describe(entry):
+            entry["description"] = parse_device_description(fetch_text(entry["location"]), entry["location"])
+
+        workers = []
         for ip, entry in found.items():
             if entry["location"] and is_private_ip(ip):
-                entry["description"] = parse_device_description(fetch_text(entry["location"]), entry["location"])
+                worker = threading.Thread(target=describe, args=(entry,))
+                worker.daemon = True
+                worker.start()
+                workers.append(worker)
+        give_up_at = time.time() + 4.0
+        for worker in workers:
+            worker.join(timeout=max(0.0, give_up_at - time.time()))
     return found

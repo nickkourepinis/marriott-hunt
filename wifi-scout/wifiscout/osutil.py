@@ -110,3 +110,12 @@ def enable_ansi():
         return bool(kernel32.SetConsoleMode(handle, mode.value | 0x0004))
     except Exception:
         return False
+
+
+def command_name():
+    """How the user starts this program on this computer, for instructions in reports."""
+    launcher = "py" if PLATFORM == "win" else "python3"
+    script = os.path.basename(sys.argv[0] or "")
+    if script.endswith(".pyz"):
+        return "%s %s" % (launcher, script)
+    return "%s -m wifiscout" % launcher

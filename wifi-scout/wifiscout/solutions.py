@@ -274,7 +274,7 @@ CATALOG = {
         "steps": [
             "Give them specifics from this report: measured speeds against the plan, packet loss, outage times, modem signal levels.",
             "Ask for a line test and a technician visit if levels are out of range.",
-            "Run 'wifiscout monitor' for a day beforehand: a timestamped outage log is hard to argue with.",
+            "Run '{cmd} monitor --hours 24' for a day beforehand: a timestamped outage log is hard to argue with.",
         ],
     },
     "isp_plan": {
@@ -348,13 +348,13 @@ CATALOG = {
         "kind": "measure", "cost": "free", "effort": "15 min",
         "why": "This computer only knows the signal where it sits. The phone survey measures every room and "
                "shows exactly where coverage falls off.",
-        "steps": ["Run 'wifiscout survey', scan the QR code with the iPhone camera, and tap Measure in each room."],
+        "steps": ["Run '{cmd} survey', scan the QR code with the iPhone camera, and tap Measure in each room."],
     },
     "run_monitor": {
         "title": "Log the connection for a day to catch drop-outs",
         "kind": "measure", "cost": "free", "effort": "5 min",
         "why": "Intermittent problems rarely show up in a one-minute test.",
-        "steps": ["Run 'wifiscout monitor --hours 24' on a computer that stays on, then rebuild the report."],
+        "steps": ["Run '{cmd} monitor --hours 24' on a computer that stays on, then rebuild the report."],
     },
 }
 

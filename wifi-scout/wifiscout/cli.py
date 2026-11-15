@@ -14,6 +14,12 @@ from . import __version__, audit, demo, eero, modem, monitor, netinfo, osutil, q
 SEVERITY_TAG = {"critical": "[!!]", "major": "[! ]", "minor": "[- ]", "info": "[i ]", "good": "[ok]"}
 
 
+def file_link(path):
+    """A file:// address that works on Windows as well."""
+    import pathlib
+    return pathlib.Path(path).resolve().as_uri()
+
+
 def say(message=""):
     print(message)
     sys.stdout.flush()
@@ -60,6 +66,8 @@ def print_summary(bundle):
     say()
     if analysis["score"] is not None:
         say("NETWORK HEALTH: %d out of 100" % analysis["score"])
+        if analysis.get("score_note"):
+            say("(%s)" % analysis["score_note"])
     say(wrap(analysis["verdict"], 0))
     problems = [f for f in analysis["findings"] if f["severity"] != "good"]
     good = [f for f in analysis["findings"] if f["severity"] == "good"]
@@ -161,12 +169,23 @@ def print_modem(result):
                                                                           ", ".join(cell[key]["bands"]) or "?"))
     elif status == "login_required":
         say("The modem page at %s needs a login." % (result.get("url") or "http://192.168.100.1"))
-        say("Sign in with a browser, save the status page, then run: wifiscout modem --file saved-page.html")
+        say("Sign in with a browser, save the status page, then run: %s modem --file saved-page.html" % osutil.command_name())
     elif status == "no_data":
-        say("A modem page answered at %s but no signal table was recognised." % result.get("url"))
-        say("Save the page that shows downstream and upstream channels and run: wifiscout modem --file saved-page.html")
+        say("Something answered at %s, but no modem signal table was found there." % (result.get("address") or "192.168.100.1"))
+        say("If you have a cable modem, open that address in a browser, save the page that lists the")
+        say("downstream and upstream channels, and run: %s modem --file saved-page.html" % osutil.command_name())
     else:
         say("No modem status page found at 192.168.100.1. That is normal for fibre and for many all-in-one gateways.")
+
+
+def bonjour_name():
+    """This Mac's name on the local network, e.g. 'Study-MacBook.local'. None elsewhere."""
+    if osutil.PLATFORM != "mac":
+        return None
+    name = osutil.run(["scutil", "--get", "LocalHostName"], timeout=5)[1].strip()
+    if name and all(ch.isalnum() or ch == "-" for ch in name):
+        return name + ".local"
+    return None
 
 
 def open_data(args):
@@ -210,9 +229,12 @@ def save_audit_part(data, name, value):
 def serve(data, args, net=None):
     """Start the survey server, show how to reach it, and wait for Ctrl-C."""
     net = net or netinfo.get_network()
+    if getattr(args, "new_key", False):
+        server.load_key(data, renew=True)
     try:
         app, servers = server.start(data, local_ip=net.get("local_ip"), collector_via=net.get("via") or "unknown",
-                                    http_port=args.port, https_port=args.port + 1, tls=not args.no_tls)
+                                    http_port=args.port, https_port=args.port + 1, tls=not args.no_tls,
+                                    stable_host=bonjour_name())
     except OSError as exc:
         say("Could not start the survey server: %s" % exc)
         return 1
@@ -276,7 +298,7 @@ def cmd_run(args):
     if args.no_survey:
         if not args.no_browser:
             try:
-                webbrowser.open("file://" + path)
+                webbrowser.open(file_link(path))
             except Exception:
                 pass
         return 0
@@ -333,7 +355,8 @@ def cmd_speed(args):
     save_audit_part(data, "speed", result)
     say()
     if result.get("down_mbps") is None and result.get("up_mbps") is None:
-        say("The speed test could not run: %s" % (result["errors"][0] if result["errors"] else "unknown reason"))
+        reason = result["errors"][0] if result["errors"] else "unknown reason"
+        say("The speed test could not run: %s." % reason.split(": ", 1)[-1])
         return 1
     say("Download %s Mbps   Upload %s Mbps   (computer on %s)" % (result.get("down_mbps"), result.get("up_mbps"),
                                                                  "Wi-Fi" if net.get("via") == "wifi" else net.get("via")))
@@ -341,6 +364,8 @@ def cmd_speed(args):
         say("Lag under load: grade %s (+%s ms when the line is busy)" % (result["bloat_grade"], result["bloat_ms"]))
     if result.get("isp"):
         say("Provider: %s" % result["isp"])
+    if result.get("note"):
+        say(result["note"])
     return 0
 
 
@@ -412,8 +437,8 @@ def cmd_monitor(args):
     data = open_data(args)
     minutes = args.hours * 60.0 if args.hours else args.minutes
     path = data.path("monitor.jsonl")
-    say("Watching the connection for %s. Press Ctrl-C to stop early." % (
-        "%.1f hours" % (minutes / 60.0) if minutes >= 90 else "%d minutes" % minutes))
+    span = "%.1f hours" % (minutes / 60.0) if minutes >= 90 else "%d minutes" % minutes if minutes >= 2 else "%d seconds" % (minutes * 60)
+    say("Watching the connection for %s. Press Ctrl-C to stop early." % span)
     monitor.run(path, minutes=minutes, interval=args.interval, webhook=args.webhook, progress=say)
     summary = monitor.summarize(monitor.load_samples(path))
     say()
@@ -434,7 +459,7 @@ def cmd_report(args):
     say("Report: %s" % path)
     if args.open:
         try:
-            webbrowser.open("file://" + path)
+            webbrowser.open(file_link(path))
         except Exception:
             pass
     return 0
@@ -452,7 +477,7 @@ def cmd_demo(args):
         return serve(data, args, net={"local_ip": netinfo.udp_local_ip() or "127.0.0.1", "via": "ethernet"})
     if not args.no_browser:
         try:
-            webbrowser.open("file://" + path)
+            webbrowser.open(file_link(path))
         except Exception:
             pass
     return 0
@@ -470,6 +495,7 @@ def build_parser():
         sub.add_argument("--port", type=int, default=8787, help="port for the survey page (default 8787; secure page uses the next one)")
         sub.add_argument("--no-tls", action="store_true", help="do not start the secure page (disables walk mode)")
         sub.add_argument("--no-browser", action="store_true", help="do not open a browser window")
+        sub.add_argument("--new-key", action="store_true", help="make a new access key (old phone links and the Shortcut address stop working)")
 
     def add_profile_options(sub):
         sub.add_argument("--home", choices=["house", "townhouse", "apartment", "condo"], help="type of home")

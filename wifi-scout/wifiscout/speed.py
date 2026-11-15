@@ -39,6 +39,11 @@ class Endpoint(object):
 
 
 CLOUDFLARE = Endpoint("Cloudflare", "https", "speed.cloudflare.com", 443, "/__down?bytes=%d", "/__up", "/meta")
+# Public test files, used for download only when the main server cannot be reached.
+FALLBACKS = (
+    Endpoint("Hetzner (US)", "https", "ash-speed.hetzner.com", 443, "/100MB.bin?n=%d", None),
+    Endpoint("Hetzner (EU)", "https", "fsn1-speed.hetzner.com", 443, "/100MB.bin?n=%d", None),
+)
 
 _context = None
 
@@ -165,6 +170,23 @@ def dns_profile(system_servers, names=DNS_NAMES):
 
 # ------------------------------------------------------------- throughput
 
+def friendly_error(exc, host):
+    """Say what went wrong with a transfer in words a person can act on."""
+    text = str(exc)
+    if isinstance(exc, socket.gaierror):
+        return "could not look up %s (no internet connection, or a DNS problem)" % host
+    if isinstance(exc, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in text:
+        return ("the secure connection to %s could not be verified. If this is Python from python.org on a Mac, "
+                "run 'Install Certificates.command' in its Applications folder" % host)
+    if isinstance(exc, socket.timeout) or "timed out" in text:
+        return "the connection to %s timed out" % host
+    if isinstance(exc, ConnectionRefusedError):
+        return "%s refused the connection" % host
+    if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+        return "the connection to %s was cut off" % host
+    return "%s: %s" % (type(exc).__name__, text or "unknown error")
+
+
 class _Counter(object):
     def __init__(self):
         self.total = 0
@@ -190,7 +212,7 @@ def _download_worker(endpoint, stop_at, counter, chunk_bytes):
                          headers={"User-Agent": USER_AGENT, "Accept-Encoding": "identity"})
             response = conn.getresponse()
             if response.status != 200:
-                counter.errors.append("HTTP %d from %s" % (response.status, endpoint.host))
+                counter.errors.append("%s answered with an error (HTTP %d)" % (endpoint.host, response.status))
                 return
             got_any = False
             while time.perf_counter() < stop_at:
@@ -203,7 +225,7 @@ def _download_worker(endpoint, stop_at, counter, chunk_bytes):
                 counter.errors.append("empty response from %s" % endpoint.host)
                 return
         except (OSError, http.client.HTTPException) as exc:
-            counter.errors.append("%s: %s" % (type(exc).__name__, exc))
+            counter.errors.append(friendly_error(exc, endpoint.host))
             return
         finally:
             if conn is not None:
@@ -234,10 +256,10 @@ def _upload_worker(endpoint, stop_at, counter, request_bytes, block):
             response = conn.getresponse()
             response.read()
             if response.status >= 400:
-                counter.errors.append("HTTP %d from %s" % (response.status, endpoint.host))
+                counter.errors.append("%s answered with an error (HTTP %d)" % (endpoint.host, response.status))
                 return
         except (OSError, http.client.HTTPException) as exc:
-            counter.errors.append("%s: %s" % (type(exc).__name__, exc))
+            counter.errors.append(friendly_error(exc, endpoint.host))
             return
         finally:
             if conn is not None:
@@ -386,6 +408,8 @@ def http_speedtest(endpoint=CLOUDFLARE, duration=8.0, streams=4, anchor="1.1.1.1
     }
     warmup = min(1.5, duration / 4.0)
     for direction in ("down", "up"):
+        if direction == "up" and not endpoint.up_path:
+            continue
         say("Measuring %s speed" % ("download" if direction == "down" else "upload"))
         latency = {}
         pinger = None
@@ -452,6 +476,15 @@ def run_speedtest(duration=8.0, idle_ms=None, progress=None, endpoint=CLOUDFLARE
         result = parse_network_quality(osutil.run(["networkQuality", "-c"], timeout=90)[1])
     if result is None:
         result = http_speedtest(endpoint=endpoint, duration=duration, idle_ms=idle_ms, progress=say)
+        if result["down_mbps"] is None and endpoint is CLOUDFLARE:
+            for fallback in FALLBACKS:
+                say("Trying another test server (%s), download only" % fallback.name)
+                second = http_speedtest(endpoint=fallback, duration=duration, idle_ms=idle_ms, progress=say)
+                if second["down_mbps"] is not None:
+                    second["errors"] = []
+                    second["note"] = "Upload was not measured: the fallback server only supports downloads."
+                    result = second
+                    break
     meta = fetch_meta(endpoint) if endpoint is CLOUDFLARE else parse_meta("")
     result["isp"] = meta["isp"]
     result["asn"] = meta["asn"]

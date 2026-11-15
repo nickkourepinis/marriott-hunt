@@ -88,7 +88,7 @@ class EeroClient(object):
         meta = data.get("meta") or {}
         code = meta.get("code", response.status)
         if code == 401:
-            raise EeroError("The eero sign-in has expired. Run 'wifiscout eero --login' again.")
+            raise EeroError("The eero sign-in has expired. Run the eero command again with --login.")
         if code >= 400:
             raise EeroError("eero service error %s: %s" % (code, meta.get("error") or "unknown"))
         return data.get("data")

@@ -68,7 +68,10 @@ def _open_ports(ip, ports=PROBE_PORTS, timeout=0.35):
     found = []
 
     def probe(port):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except OSError:
+            return False
         sock.settimeout(timeout)
         try:
             return sock.connect_ex((ip, port)) == 0
@@ -203,7 +206,8 @@ def run_scan(progress=None, probe_ports=True, ping_devices=True, net=None):
                 records[ip]["hostname"] = name
     if probe_ports and targets:
         say("Checking what kind of device each one is")
-        for ip, ports in parallel(_open_ports, targets, workers=24, timeout=20.0).items():
+        # 8 devices x 20 ports at a time stays well under the 256 open files macOS allows by default.
+        for ip, ports in parallel(_open_ports, targets, workers=8, timeout=30.0).items():
             records[ip]["ports"] = ports or []
     if ping_devices and targets:
         say("Measuring the link to each device")

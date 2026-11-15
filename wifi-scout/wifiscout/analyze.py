@@ -12,7 +12,7 @@ import math
 import re
 import time
 
-from . import solutions
+from . import osutil, solutions
 from .devices import STATIONARY_KINDS
 
 GRADES = (("strong", 70), ("fair", 50), ("weak", 30), ("dead", 0))
@@ -479,8 +479,8 @@ def rules_speed(bundle, ctx, rep):
             rep.add("below_plan_wifi", "minor", "isp",
                     "Download measured %s Mbps on a %s Mbps plan, over Wi-Fi" % (_num(down), _num(plan_down)),
                     "That is %d%% of the plan, but this computer was on Wi-Fi, so the wireless link may be the "
-                    "limit rather than the line. Plug it into the router with a cable and run 'wifiscout speed' "
-                    "again before judging the provider." % round(100.0 * down / plan_down))
+                    "limit rather than the line. Plug it into the router with a cable and run '%s speed' "
+                    "again before judging the provider." % (round(100.0 * down / plan_down), osutil.command_name()))
         elif plan_down and down < 0.8 * plan_down:
             severity = "major" if down < 0.5 * plan_down else "minor"
             rep.add("below_plan", severity, "isp",
@@ -574,7 +574,8 @@ def rules_modem(bundle, ctx, rep):
     if status == "login_required":
         rep.add("modem_login", "info", "isp", "The modem's signal page needs a login",
                 "Open %s in a browser, sign in (the password is often on the modem's label), save the connection "
-                "or status page, then run: wifiscout modem --file saved-page.html" % (modem.get("url") or "http://192.168.100.1"))
+                "or status page, then run: %s modem --file saved-page.html" % (
+                    modem.get("url") or "http://192.168.100.1", osutil.command_name()))
         return
     if status != "ok":
         return
@@ -823,7 +824,8 @@ def build_plan(rep):
                 continue
             item = plan.setdefault(fix, {
                 "id": fix, "title": entry["title"], "kind": entry["kind"], "cost": entry["cost"],
-                "effort": entry["effort"], "why": entry["why"], "steps": list(entry["steps"]),
+                "effort": entry["effort"], "why": entry["why"],
+                "steps": [step.replace("{cmd}", osutil.command_name()) for step in entry["steps"]],
                 "products": list(entry.get("products") or []), "for": [], "notes": [],
                 "_rank": 9, "_position": 9, "_order": order,
             })
@@ -874,8 +876,8 @@ def analyze(bundle):
     rules_monitor(bundle, ctx, rep)
     if spots and not (bundle.get("scan") or bundle.get("latency") or bundle.get("wifi")):
         rep.add("no_audit", "info", "coverage", "Only the phone readings were analysed",
-                "Run the full check ('wifiscout') on the computer to add devices, channels, internet speed and "
-                "the modem to this picture.")
+                "Run the full check ('%s') on the computer to add devices, channels, internet speed and "
+                "the modem to this picture." % osutil.command_name())
     findings = sorted(rep.findings, key=lambda f: SEVERITY_RANK[f["severity"]])
     penalty = 0
     counted = {}
@@ -896,6 +898,7 @@ def analyze(bundle):
     return {
         "score": score if measured else None,
         "grade": letter(score) if measured else None,
+        "score_note": None if spots or not measured else "Coverage not measured yet: this score covers only what the computer could see.",
         "verdict": verdict(score, findings) if measured else "Nothing measured yet.",
         "findings": findings,
         "plan": build_plan(rep),

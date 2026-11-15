@@ -150,7 +150,6 @@ def generate_rsa(bits=2048):
 
 def _inverse(a, m):
     """Modular inverse by the extended Euclid algorithm (works on Python 3.7 too)."""
-    g, x, y = m, 0, 1
     r, s = a % m, 1
     old_r, old_s = m, 0
     while r:
