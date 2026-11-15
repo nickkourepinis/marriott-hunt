@@ -99,8 +99,12 @@
     if (speed.isp) bits.push(speed.isp);
     var ctx = (B.analysis || {}).context || {};
     if (ctx.brand) bits.push(ctx.brand + (ctx.is_mesh ? ' mesh, ' + ctx.access_points + ' access points' : ' router'));
-    if (meta.demo) bits.push('SAMPLE DATA, not your network');
     return h('header', { class: 'masthead' }, h('h1', { text: 'WiFi Scout report' }), h('span', { class: 'meta', text: bits.join(' · ') }));
+  }
+  function sampleBanner() {
+    if (!(B.meta || {}).demo) return null;
+    return h('div', { class: 'panel sample', role: 'note' }, h('b', { text: 'Sample report. ' }),
+      'Every device, name and number on this page is invented, to show what WiFi Scout produces. Run it at home for your own.');
   }
   function verdictPanel() {
     var a = B.analysis || {}, k = a.kpis || {}, speed = B.speed || {}, cov = a.coverage || {}, ctx = a.context || {};
@@ -628,7 +632,7 @@
     var scroll = window.scrollY;
     observers.forEach(function (o) { o.disconnect(); }); observers = []; mounts = [];
     WS.clear(page);
-    [masthead(), verdictPanel(), livePanel(), planSection(), coverageSection(), findingsSection(), wifiSection(), speedSection(),
+    [masthead(), sampleBanner(), verdictPanel(), livePanel(), planSection(), coverageSection(), findingsSection(), wifiSection(), speedSection(),
       devicesSection(), modemSection(), eeroSection(), stabilitySection(), toolsSection(), footer()].forEach(function (el) { if (el) page.appendChild(el); });
     Object.keys(open).forEach(function (id) { var d = document.getElementById(id); if (d) d.open = open[id]; });
     mounts.forEach(function (fn) { fn(); });
