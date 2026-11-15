@@ -172,6 +172,9 @@
       var mq = window.matchMedia('(prefers-color-scheme: dark)');
       if (mq.addEventListener) mq.addEventListener('change', this._redraw);
     }
+    if (window.MutationObserver) {   // a host page may switch theme by attribute
+      new MutationObserver(this._redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    }
   }
   CoverageMap.prototype.setData = function (data) {
     var self = this;

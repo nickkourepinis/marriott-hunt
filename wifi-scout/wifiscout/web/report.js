@@ -640,6 +640,12 @@
   }
 
   render();
+  if (window.MutationObserver) {
+    new MutationObserver(function () { render(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').addEventListener) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { render(); });
+  }
   if (LIVE) {
     WS.api.key = LIVE.key;
     var signature = JSON.stringify(B);
