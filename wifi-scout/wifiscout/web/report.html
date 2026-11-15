@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WiFi Scout Report</title>
+<style>
+/*INLINE:app.css*/
+body { padding: 0 0 48px; }
+.page { max-width: 1040px; margin: 0 auto; padding: 0 max(var(--gutter), env(safe-area-inset-right, 0px)) 0 max(var(--gutter), env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 20px; }
+.masthead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding: 28px 0 0; }
+.masthead h1 { font-size: 26px; }
+.masthead .meta { color: var(--ink-3); font-size: 13.5px; }
+.verdict { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 20px 28px; align-items: start; }
+.hero { display: flex; flex-direction: column; gap: 8px; }
+.hero .figure { display: flex; align-items: baseline; gap: 8px; }
+.hero .figure b { font-size: 64px; font-weight: 650; line-height: 0.95; letter-spacing: -0.03em; }
+.hero .figure span { color: var(--ink-3); }
+.hero p { font-size: 15.5px; color: var(--ink-2); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--plane); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.tile .label { font-size: 12.5px; color: var(--ink-3); }
+.tile .value { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .value small { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.tile .sub { font-size: 12.5px; color: var(--ink-2); }
+section > h2 { margin: 6px 0 10px; }
+section > .lede { color: var(--ink-2); margin: -4px 0 12px; max-width: 68ch; }
+.live { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center; border-color: var(--accent); }
+.live .qr { background: #fff; border-radius: 8px; padding: 6px; line-height: 0; }
+.live .qr svg { width: 168px; height: 168px; }
+.live ol { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+code { font-family: var(--mono); font-size: 12.5px; background: var(--plane); border-radius: 5px; padding: 2px 5px; word-break: break-all; }
+.plan { display: flex; flex-direction: column; gap: 8px; }
+.fix { background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 12px 16px; }
+.fix summary { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; list-style: none; }
+.fix summary::-webkit-details-marker { display: none; }
+.fix summary .n { font-weight: 650; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.fix summary .t { font-weight: 650; }
+.fix summary .tags { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
+.fix .body { padding: 10px 0 4px 38px; display: flex; flex-direction: column; gap: 8px; max-width: 72ch; }
+.fix .body ol, .fix .body ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.fix .for { font-size: 13px; color: var(--ink-3); }
+.fix .note { background: var(--accent-wash); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
+.cover { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+.cover .map-wrap canvas { height: 440px; }
+.empty { border: 1px dashed var(--axis); border-radius: 10px; padding: 28px 20px; text-align: center; color: var(--ink-2); }
+.findings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.finding { display: flex; flex-direction: column; gap: 6px; }
+.finding h3 { font-size: 15.5px; }
+.finding p { color: var(--ink-2); font-size: 14.5px; }
+.finding ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13.5px; }
+.finding .fixes { font-size: 13px; color: var(--ink-3); }
+.area-title { grid-column: 1 / -1; margin-top: 6px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; font-size: 14.5px; }
+.facts dt { color: var(--ink-3); }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart-title { font-weight: 650; }
+.chart-sub { font-size: 13px; color: var(--ink-3); margin-bottom: 6px; }
+.chart text { font-family: var(--font); }
+details.table-view { margin-top: 6px; font-size: 13.5px; }
+details.table-view summary { color: var(--ink-3); font-size: 13px; }
+.tools { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; }
+.tools li b { display: block; font-weight: 650; }
+.tools li span { color: var(--ink-2); font-size: 14px; }
+footer { color: var(--ink-3); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 760px) {
+  .verdict, .cover, .findings, .grid2, .tools, .live { grid-template-columns: minmax(0, 1fr); }
+  .cover .map-wrap canvas { height: min(92vw, 420px); }
+  .fix summary { grid-template-columns: 24px minmax(0, 1fr); }
+  .fix summary .tags { grid-column: 2; }
+  .fix .body { padding-left: 0; }
+  .hero .figure b { font-size: 56px; }
+}
+@media print {
+  body { background: #fff; }
+  .live, .filters label.heat { display: none; }
+  details { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="page" id="page"><p class="muted" style="padding-top:28px">Building the report…</p></div>
+<script id="ws-data" type="application/json">/*DATA*/</script>
+<script>
+/*INLINE:common.js*/
+</script>
+<script>
+/*INLINE:report.js*/
+</script>
+</body>
+</html>
